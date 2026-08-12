@@ -1,5 +1,6 @@
 # Weather Whiplash — Live Track Condition Detector
 
+!(Photo)[MAIN.png]
 Reads camera frames of a racetrack, decides whether the surface is **Dry,
 Damp, Wet or Drying**, tracks how it changes over time, and turns that into a
 tyre suggestion.
