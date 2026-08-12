@@ -1,0 +1,595 @@
+{
+ "_meta": {
+  "purpose": "Circuit profiles for the Weather Whiplash drying-rate and tire-strategy engine.",
+  "provenance": {
+   "surface_type": "Objectively verifiable. Street circuits are public roads; permanent circuits are purpose-built.",
+   "shade": "Observable from broadcast footage. Affects how much sun reaches the surface.",
+   "climate": "Verifiable from location. Drives typical humidity and ambient temperature.",
+   "severity": "OUR OWN categorisation, inferred from Pirelli's published compound nominations - harder compounds are brought to higher-severity circuits. Pirelli does not publish raw abrasiveness numbers.",
+   "lap_time_s": "MEASURED via FastF1 (2026-08-11): median green-flag race lap, excluding pit, safety-car and opening laps.",
+   "pit_loss_s": "MEASURED via FastF1 (2026-08-11): median of (in-lap + out-lap) - 2 x driver's own median green-flag lap, green-flag stops only.",
+   "typical_weather": "ESTIMATED typical race-day conditions, not measured. Used as defaults so each circuit starts from plausible values instead of one global guess. Override per request, or fetch live conditions using lat/lon.",
+   "lat_lon": "Circuit coordinates, for optional live weather lookup."
+  },
+  "display_rule": "Never show C-numbers in the UI. Compound colours are relative to the three compounds nominated for a given race, so any fixed C-number to colour mapping is wrong at most events. Show Soft / Medium / Hard.",
+  "selection_note": "Ten circuits chosen to span the full behavioural range - fastest to slowest drying, most to least abrasive. More circuits add no new behaviour to demonstrate."
+ },
+ "bahrain": {
+  "name": "Bahrain International Circuit",
+  "country": "Bahrain",
+  "surface_type": "permanent",
+  "shade": "none",
+  "climate": "arid_hot",
+  "severity": "very_high",
+  "lap_time_s": 98.4,
+  "pit_loss_s": 23.9,
+  "notes": "Fastest drying on the list AND among the most abrasive - the two axes are independent. Granite-aggregate surface drives high degradation; Pirelli brings the hardest compounds. Desert dust can confuse the vision model.",
+  "_measured": {
+   "year": 2025,
+   "session": "Race",
+   "event": "Bahrain Grand Prix",
+   "location": "Sakhir",
+   "pit_stops_sampled": 28,
+   "wet_session": false
+  },
+  "lat": 26.0325,
+  "lon": 50.5106,
+  "typical_weather": {
+   "track_temp": 29,
+   "air_temp": 25,
+   "humidity": 45,
+   "wind_speed": 4.0
+  }
+ },
+ "jeddah": {
+  "name": "Jeddah Corniche Circuit",
+  "country": "Saudi Arabia",
+  "surface_type": "street",
+  "shade": "some",
+  "climate": "arid_hot",
+  "severity": "medium",
+  "lap_time_s": 94.4,
+  "pit_loss_s": 20.7,
+  "notes": "Street layout but very smooth and fast. Heat offsets the poorer street drainage.",
+  "_measured": {
+   "year": 2025,
+   "session": "Race",
+   "event": "Saudi Arabian Grand Prix",
+   "location": "Jeddah",
+   "pit_stops_sampled": 16,
+   "wet_session": false
+  },
+  "lat": 21.6319,
+  "lon": 39.1044,
+  "typical_weather": {
+   "track_temp": 31,
+   "air_temp": 28,
+   "humidity": 60,
+   "wind_speed": 3.0
+  }
+ },
+ "suzuka": {
+  "name": "Suzuka International Racing Course",
+  "country": "Japan",
+  "surface_type": "permanent",
+  "shade": "some",
+  "climate": "temperate_humid",
+  "severity": "very_high",
+  "lap_time_s": 93.2,
+  "pit_loss_s": 24.5,
+  "notes": "Among the highest tire loads on the calendar. Intermediates overheat quickly once a dry line forms.",
+  "_measured": {
+   "year": 2025,
+   "session": "Race",
+   "event": "Japanese Grand Prix",
+   "location": "Suzuka",
+   "pit_stops_sampled": 21,
+   "wet_session": false
+  },
+  "lat": 34.8431,
+  "lon": 136.541,
+  "typical_weather": {
+   "track_temp": 30,
+   "air_temp": 20,
+   "humidity": 58,
+   "wind_speed": 3.0
+  }
+ },
+ "miami": {
+  "name": "Miami International Autodrome",
+  "country": "United States",
+  "surface_type": "street",
+  "shade": "some",
+  "climate": "humid_subtropical",
+  "severity": "low",
+  "lap_time_s": 93.0,
+  "pit_loss_s": 20.8,
+  "notes": "Poor street drainage combined with high humidity. Water pools and clears slowly.",
+  "_measured": {
+   "year": 2024,
+   "session": "Race",
+   "event": "Miami Grand Prix",
+   "location": "Miami",
+   "pit_stops_sampled": 12,
+   "wet_session": false
+  },
+  "lat": 25.9581,
+  "lon": -80.2389,
+  "typical_weather": {
+   "track_temp": 48,
+   "air_temp": 30,
+   "humidity": 65,
+   "wind_speed": 4.0
+  }
+ },
+ "monaco": {
+  "name": "Circuit de Monaco",
+  "country": "Monaco",
+  "surface_type": "street",
+  "shade": "high",
+  "climate": "temperate",
+  "severity": "low",
+  "lap_time_s": 77.1,
+  "pit_loss_s": 19.1,
+  "notes": "Slowest drying on the list. Public road drainage, buildings blocking sun and wind, tunnel section stays damp. Be conservative recommending slicks here.",
+  "_measured": {
+   "year": 2025,
+   "session": "Race",
+   "event": "Monaco Grand Prix",
+   "location": "Monaco",
+   "pit_stops_sampled": 36,
+   "wet_session": false
+  },
+  "lat": 43.7347,
+  "lon": 7.4206,
+  "typical_weather": {
+   "track_temp": 40,
+   "air_temp": 22,
+   "humidity": 60,
+   "wind_speed": 2.0
+  }
+ },
+ "montreal": {
+  "name": "Circuit Gilles Villeneuve",
+  "country": "Canada",
+  "surface_type": "semi_permanent",
+  "shade": "some",
+  "climate": "temperate",
+  "severity": "low",
+  "lap_time_s": 77.4,
+  "pit_loss_s": 20.2,
+  "notes": "Park circuit on public roads, smooth and low-abrasion - Pirelli brings the softest compounds on the calendar. The tire issue here is graining and warm-up, not wear. Frequently changeable weather.",
+  "_measured": {
+   "year": 2023,
+   "session": "Race",
+   "event": "Canadian Grand Prix",
+   "location": "Montr\u00e9al",
+   "pit_stops_sampled": 14,
+   "wet_session": false
+  },
+  "lat": 45.5,
+  "lon": -73.5228,
+  "typical_weather": {
+   "track_temp": 35,
+   "air_temp": 22,
+   "humidity": 55,
+   "wind_speed": 3.0
+  }
+ },
+ "silverstone": {
+  "name": "Silverstone Circuit",
+  "country": "United Kingdom",
+  "surface_type": "permanent",
+  "shade": "none",
+  "climate": "temperate",
+  "severity": "very_high",
+  "lap_time_s": 93.1,
+  "pit_loss_s": 19.8,
+  "notes": "Open airfield - excellent drainage, full sun and wind exposure. Dry line forms fast. High lateral loads.",
+  "_measured": {
+   "year": 2023,
+   "session": "Race",
+   "event": "British Grand Prix",
+   "location": "Silverstone",
+   "pit_stops_sampled": 10,
+   "wet_session": false
+  },
+  "lat": 52.0786,
+  "lon": -1.0169,
+  "typical_weather": {
+   "track_temp": 30,
+   "air_temp": 19,
+   "humidity": 65,
+   "wind_speed": 5.0
+  }
+ },
+ "spa": {
+  "name": "Circuit de Spa-Francorchamps",
+  "country": "Belgium",
+  "surface_type": "permanent",
+  "shade": "some",
+  "climate": "temperate",
+  "severity": "high",
+  "lap_time_s": 109.0,
+  "pit_loss_s": 20.0,
+  "notes": "Longest lap. Genuine microclimates - one sector can be wet while another is dry. The best argument for per-sector monitoring.",
+  "_measured": {
+   "year": 2024,
+   "session": "Race",
+   "event": "Belgian Grand Prix",
+   "location": "Spa-Francorchamps",
+   "pit_stops_sampled": 32,
+   "wet_session": false
+  },
+  "lat": 50.4372,
+  "lon": 5.9714,
+  "typical_weather": {
+   "track_temp": 29,
+   "air_temp": 19,
+   "humidity": 72,
+   "wind_speed": 4.0
+  }
+ },
+ "zandvoort": {
+  "name": "Circuit Zandvoort",
+  "country": "Netherlands",
+  "surface_type": "permanent",
+  "shade": "none",
+  "climate": "temperate_coastal",
+  "severity": "high",
+  "lap_time_s": 76.1,
+  "pit_loss_s": 18.3,
+  "notes": "Steeply banked corners (Tarzan, Arie Luyendyk) load the tires heavily - Pirelli brings hard compounds. Coastal wind accelerates drying. Blown sand can look like drying patches: a known vision failure mode.",
+  "_measured": {
+   "year": 2025,
+   "session": "Race",
+   "event": "Dutch Grand Prix",
+   "location": "Zandvoort",
+   "pit_stops_sampled": 8,
+   "wet_session": false
+  },
+  "lat": 52.3888,
+  "lon": 4.5409,
+  "typical_weather": {
+   "track_temp": 32,
+   "air_temp": 20,
+   "humidity": 70,
+   "wind_speed": 6.0
+  }
+ },
+ "singapore": {
+  "name": "Marina Bay Street Circuit",
+  "country": "Singapore",
+  "surface_type": "street",
+  "shade": "high",
+  "climate": "tropical_humid",
+  "severity": "low",
+  "lap_time_s": 98.5,
+  "pit_loss_s": 30.2,
+  "notes": "Night race, very high humidity, street drainage, buildings on all sides. Drying nearly stalls - the strongest test of the humidity term.",
+  "_measured": {
+   "year": 2024,
+   "session": "Race",
+   "event": "Singapore Grand Prix",
+   "location": "Marina Bay",
+   "pit_stops_sampled": 22,
+   "wet_session": false
+  },
+  "lat": 1.2914,
+  "lon": 103.864,
+  "typical_weather": {
+   "track_temp": 32,
+   "air_temp": 29,
+   "humidity": 75,
+   "wind_speed": 1.0
+  }
+ },
+ "albert_park": {
+  "name": "Albert Park Circuit",
+  "country": "Australia",
+  "surface_type": "semi_permanent",
+  "shade": "some",
+  "climate": "temperate_coastal",
+  "severity": "medium",
+  "lap_time_s": 82.0,
+  "pit_loss_s": 19.0,
+  "notes": "Parkland semi-street layout, tree-lined sections.",
+  "_estimated": {
+   "note": "lap_time_s and pit_loss_s are typical published values, not FastF1-measured. Run tools/refresh_circuits.py to replace with measured data."
+  },
+  "lat": -37.8497,
+  "lon": 144.968,
+  "typical_weather": {
+   "track_temp": 22,
+   "air_temp": 19,
+   "humidity": 60,
+   "wind_speed": 4.0
+  }
+ },
+ "shanghai": {
+  "name": "Shanghai International Circuit",
+  "country": "China",
+  "surface_type": "permanent",
+  "shade": "none",
+  "climate": "temperate_humid",
+  "severity": "medium",
+  "lap_time_s": 98.0,
+  "pit_loss_s": 22.0,
+  "notes": "Long back straight, often cool and damp in April.",
+  "_estimated": {
+   "note": "lap_time_s and pit_loss_s are typical published values, not FastF1-measured. Run tools/refresh_circuits.py to replace with measured data."
+  },
+  "lat": 31.3389,
+  "lon": 121.2197,
+  "typical_weather": {
+   "track_temp": 21,
+   "air_temp": 18,
+   "humidity": 65,
+   "wind_speed": 3.0
+  }
+ },
+ "imola": {
+  "name": "Autodromo Enzo e Dino Ferrari (Imola)",
+  "country": "Italy",
+  "surface_type": "permanent",
+  "shade": "some",
+  "climate": "mediterranean",
+  "severity": "medium",
+  "lap_time_s": 80.0,
+  "pit_loss_s": 27.0,
+  "notes": "Old-school parkland circuit, long pit lane.",
+  "_estimated": {
+   "note": "lap_time_s and pit_loss_s are typical published values, not FastF1-measured. Run tools/refresh_circuits.py to replace with measured data."
+  },
+  "lat": 44.3439,
+  "lon": 11.7167,
+  "typical_weather": {
+   "track_temp": 25,
+   "air_temp": 21,
+   "humidity": 55,
+   "wind_speed": 2.0
+  }
+ },
+ "barcelona": {
+  "name": "Circuit de Barcelona-Catalunya",
+  "country": "Spain",
+  "surface_type": "permanent",
+  "shade": "none",
+  "climate": "mediterranean",
+  "severity": "high",
+  "lap_time_s": 79.0,
+  "pit_loss_s": 21.0,
+  "notes": "Abrasive surface, high-energy corners.",
+  "_estimated": {
+   "note": "lap_time_s and pit_loss_s are typical published values, not FastF1-measured. Run tools/refresh_circuits.py to replace with measured data."
+  },
+  "lat": 41.57,
+  "lon": 2.2611,
+  "typical_weather": {
+   "track_temp": 30,
+   "air_temp": 24,
+   "humidity": 55,
+   "wind_speed": 3.0
+  }
+ },
+ "red_bull_ring": {
+  "name": "Red Bull Ring",
+  "country": "Austria",
+  "surface_type": "permanent",
+  "shade": "none",
+  "climate": "alpine",
+  "severity": "medium",
+  "lap_time_s": 69.0,
+  "pit_loss_s": 19.0,
+  "notes": "Short alpine lap; mountain weather changes fast.",
+  "_estimated": {
+   "note": "lap_time_s and pit_loss_s are typical published values, not FastF1-measured. Run tools/refresh_circuits.py to replace with measured data."
+  },
+  "lat": 47.2197,
+  "lon": 14.7647,
+  "typical_weather": {
+   "track_temp": 24,
+   "air_temp": 20,
+   "humidity": 55,
+   "wind_speed": 2.5
+  }
+ },
+ "hungaroring": {
+  "name": "Hungaroring",
+  "country": "Hungary",
+  "surface_type": "permanent",
+  "shade": "some",
+  "climate": "continental",
+  "severity": "medium",
+  "lap_time_s": 81.0,
+  "pit_loss_s": 20.0,
+  "notes": "Tight and dusty off-line; slow to rubber in.",
+  "_estimated": {
+   "note": "lap_time_s and pit_loss_s are typical published values, not FastF1-measured. Run tools/refresh_circuits.py to replace with measured data."
+  },
+  "lat": 47.5789,
+  "lon": 19.2486,
+  "typical_weather": {
+   "track_temp": 28,
+   "air_temp": 24,
+   "humidity": 50,
+   "wind_speed": 2.0
+  }
+ },
+ "monza": {
+  "name": "Autodromo Nazionale Monza",
+  "country": "Italy",
+  "surface_type": "permanent",
+  "shade": "some",
+  "climate": "mediterranean",
+  "severity": "low",
+  "lap_time_s": 85.0,
+  "pit_loss_s": 24.0,
+  "notes": "Lowest downforce of the year; royal-park tree cover on some sections.",
+  "_estimated": {
+   "note": "lap_time_s and pit_loss_s are typical published values, not FastF1-measured. Run tools/refresh_circuits.py to replace with measured data."
+  },
+  "lat": 45.6156,
+  "lon": 9.2811,
+  "typical_weather": {
+   "track_temp": 27,
+   "air_temp": 23,
+   "humidity": 55,
+   "wind_speed": 2.0
+  }
+ },
+ "baku": {
+  "name": "Baku City Circuit",
+  "country": "Azerbaijan",
+  "surface_type": "street",
+  "shade": "some",
+  "climate": "semi_arid_coastal",
+  "severity": "low",
+  "lap_time_s": 105.0,
+  "pit_loss_s": 19.0,
+  "notes": "Street circuit, notoriously windy off the Caspian.",
+  "_estimated": {
+   "note": "lap_time_s and pit_loss_s are typical published values, not FastF1-measured. Run tools/refresh_circuits.py to replace with measured data."
+  },
+  "lat": 40.3725,
+  "lon": 49.8533,
+  "typical_weather": {
+   "track_temp": 26,
+   "air_temp": 22,
+   "humidity": 50,
+   "wind_speed": 5.0
+  }
+ },
+ "cota": {
+  "name": "Circuit of the Americas",
+  "country": "USA",
+  "surface_type": "permanent",
+  "shade": "none",
+  "climate": "subtropical",
+  "severity": "medium",
+  "lap_time_s": 98.0,
+  "pit_loss_s": 20.0,
+  "notes": "Bumpy surface; Texas heat with occasional storms.",
+  "_estimated": {
+   "note": "lap_time_s and pit_loss_s are typical published values, not FastF1-measured. Run tools/refresh_circuits.py to replace with measured data."
+  },
+  "lat": 30.1328,
+  "lon": -97.6411,
+  "typical_weather": {
+   "track_temp": 30,
+   "air_temp": 25,
+   "humidity": 55,
+   "wind_speed": 4.0
+  }
+ },
+ "mexico_city": {
+  "name": "Autodromo Hermanos Rodriguez",
+  "country": "Mexico",
+  "surface_type": "permanent",
+  "shade": "none",
+  "climate": "highland",
+  "severity": "low",
+  "lap_time_s": 80.0,
+  "pit_loss_s": 22.0,
+  "notes": "2,200m altitude - thin air, low grip, low drag.",
+  "_estimated": {
+   "note": "lap_time_s and pit_loss_s are typical published values, not FastF1-measured. Run tools/refresh_circuits.py to replace with measured data."
+  },
+  "lat": 19.4042,
+  "lon": -99.0907,
+  "typical_weather": {
+   "track_temp": 24,
+   "air_temp": 20,
+   "humidity": 45,
+   "wind_speed": 2.0
+  }
+ },
+ "interlagos": {
+  "name": "Autodromo Jose Carlos Pace (Interlagos)",
+  "country": "Brazil",
+  "surface_type": "permanent",
+  "shade": "none",
+  "climate": "subtropical_humid",
+  "severity": "medium",
+  "lap_time_s": 73.0,
+  "pit_loss_s": 21.0,
+  "notes": "Short anticlockwise lap; rain can arrive in minutes.",
+  "_estimated": {
+   "note": "lap_time_s and pit_loss_s are typical published values, not FastF1-measured. Run tools/refresh_circuits.py to replace with measured data."
+  },
+  "lat": -23.7036,
+  "lon": -46.6997,
+  "typical_weather": {
+   "track_temp": 26,
+   "air_temp": 22,
+   "humidity": 65,
+   "wind_speed": 3.0
+  }
+ },
+ "vegas": {
+  "name": "Las Vegas Strip Circuit",
+  "country": "USA",
+  "surface_type": "street",
+  "shade": "some",
+  "climate": "desert",
+  "severity": "low",
+  "lap_time_s": 95.0,
+  "pit_loss_s": 20.0,
+  "notes": "Cold night street race - track temps far below every other event.",
+  "_estimated": {
+   "note": "lap_time_s and pit_loss_s are typical published values, not FastF1-measured. Run tools/refresh_circuits.py to replace with measured data."
+  },
+  "lat": 36.1147,
+  "lon": -115.1728,
+  "typical_weather": {
+   "track_temp": 15,
+   "air_temp": 12,
+   "humidity": 30,
+   "wind_speed": 3.0
+  }
+ },
+ "losail": {
+  "name": "Losail International Circuit",
+  "country": "Qatar",
+  "surface_type": "permanent",
+  "shade": "none",
+  "climate": "desert",
+  "severity": "very_high",
+  "lap_time_s": 85.0,
+  "pit_loss_s": 25.0,
+  "notes": "Night race; 2023 event hit mandated stint limits.",
+  "_estimated": {
+   "note": "lap_time_s and pit_loss_s are typical published values, not FastF1-measured. Run tools/refresh_circuits.py to replace with measured data."
+  },
+  "lat": 25.49,
+  "lon": 51.4542,
+  "typical_weather": {
+   "track_temp": 29,
+   "air_temp": 27,
+   "humidity": 60,
+   "wind_speed": 4.0
+  }
+ },
+ "yas_marina": {
+  "name": "Yas Marina Circuit",
+  "country": "UAE",
+  "surface_type": "permanent",
+  "shade": "some",
+  "climate": "desert",
+  "severity": "low",
+  "lap_time_s": 88.0,
+  "pit_loss_s": 21.0,
+  "notes": "Dusk-into-night race; hotel section shades the final sector.",
+  "_estimated": {
+   "note": "lap_time_s and pit_loss_s are typical published values, not FastF1-measured. Run tools/refresh_circuits.py to replace with measured data."
+  },
+  "lat": 24.4672,
+  "lon": 54.6031,
+  "typical_weather": {
+   "track_temp": 30,
+   "air_temp": 27,
+   "humidity": 60,
+   "wind_speed": 3.0
+  }
+ }
+}

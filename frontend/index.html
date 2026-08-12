@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0a0c0f" />
+    <meta name="description"
+          content="Live track condition detector - dry, damp, wet or drying,
+                   with a trend and a tyre suggestion." />
+    <title>Weather Whiplash — Live Track Condition</title>
+    <!-- Inline SVG favicon: no extra file to serve, and it still renders
+         when the demo machine is offline. -->
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%230a0c0f'/%3E%3Crect x='3' y='6' width='5' height='20' fill='%23e10600'/%3E%3Crect x='11' y='12' width='5' height='14' fill='%23ffc300'/%3E%3Crect x='19' y='9' width='5' height='17' fill='%2300c2ff'/%3E%3C/svg%3E" />
+    <style>
+      /* Painted before React mounts so the first frame is never a white
+         flash - the page opens dark, the way the app looks. */
+      html, body { background: #0a0c0f; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

@@ -1,0 +1,15 @@
+# Requested exclusions
+# I only added the paths you explicitly mentioned; if you want more added later, I can ask before including them.
+
+test_sequence/
+
+# Python cache files
+__pycache__/
+*.py[cod]
+
+# Virtual environment
+.venv/
+
+# Node modules
+node_modules/
+**/node_modules/

@@ -1,0 +1,620 @@
+/* Weather Whiplash - F1 broadcast styling.
+ *
+ * The visual language is borrowed deliberately, not decoratively. F1
+ * graphics solve the same problem this screen has: a person glances at it
+ * for one second, under pressure, and must leave with the right conclusion.
+ *
+ * Rules taken from the broadcast:
+ *   FLAG SEMANTICS   green = clear, yellow = caution, red = danger. Every
+ *                    condition colour below is a flag colour, so the state
+ *                    reads correctly to anyone who has watched a race even
+ *                    once - before they read a single word.
+ *   ANGULAR CUTS     corners are cut, not rounded. Distinctive, and cheap.
+ *   TABULAR NUMERALS every number sits in a fixed-width column so figures
+ *                    do not jitter as they update - the same reason timing
+ *                    towers use them.
+ *   DENSITY          small caps labels, tight rows, one accent per block.
+ *
+ * No web fonts: a demo machine may be offline, and a font that fails to
+ * load would change the whole layout at the worst possible moment.
+ */
+
+:root {
+  /* Surfaces - near-black, like the broadcast overlay bed. */
+  --bg:        #0a0c0f;
+  --panel:     #12161c;
+  --panel-2:   #1a2029;
+  --line:      #262d38;
+  --line-soft: #1e2028;
+
+  --ink:       #f2f5f8;
+  --ink-dim:   #97a3b2;
+  --ink-faint: #5f6b7b;
+
+  /* Brand. Used only for chrome and primary actions, never for data. */
+  --f1: #e10600;
+
+  /* Conditions, as flags. */
+  --dry:    #2ed573;   /* green flag  - track clear     */
+  --damp:   #ffc300;   /* yellow flag - caution         */
+  --wet:    #ff2d2d;   /* red         - danger          */
+  --drying: #00c2ff;   /* cyan        - improving       */
+  --ok:     #2ed573;
+
+  --mono: ui-monospace, "SF Mono", "JetBrains Mono", Consolas, monospace;
+  --sans: ui-sans-serif, system-ui, "Segoe UI Variable", "Segoe UI", Roboto,
+          "Helvetica Neue", sans-serif;
+
+  /* The broadcast corner cut, as a reusable value. */
+  --cut: 10px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+  /* Faint vertical sheen, like the gradient bed under F1 lower-thirds. */
+  background-image:
+    radial-gradient(1200px 400px at 50% -10%, rgba(225, 6, 0, .07), transparent 70%);
+  background-attachment: fixed;
+}
+
+.app {
+  max-width: 1460px;
+  margin: 0 auto;
+  padding: 16px 18px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* ---------- header: the broadcast title bar ---------- */
+.topbar {
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  background: linear-gradient(90deg, var(--panel) 0%, rgba(18, 22, 28, .4) 100%);
+  border-left: 5px solid var(--f1);
+  padding: 12px 16px;
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - var(--cut)),
+                     calc(100% - var(--cut)) 100%, 0 100%);
+}
+/* Sticky so the condition never leaves the screen while scrolling the
+   frame log - the label is the product, and losing it defeats the point. */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  backdrop-filter: blur(8px);
+}
+.topbar h1 {
+  margin: 0;
+  font-size: 1.22rem;
+  font-weight: 800;
+  font-style: italic;          /* F1 graphics lean forward - so does this */
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  align-self: center;
+  line-height: 1;
+}
+.topbar .meta {
+  font-family: var(--mono);
+  font-size: .68rem;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.dot { color: var(--wet); }
+.dot.ok { color: var(--dry); }
+
+/* The live condition, carried in the sticky header. Colour comes from the
+   .state-* class, so it stays in step with the badge automatically. */
+.live-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  align-self: center;
+  font-family: var(--mono);
+  font-size: .78rem;
+  font-weight: 700;
+  letter-spacing: .16em;
+  padding: 5px 12px;
+  color: inherit;
+  background: transparent;
+  border: 1px solid currentColor;
+}
+/* .state-* sets a BACKGROUND for the big badge; in the header we want the
+   same hue as text and border instead, so the fill is reset here. */
+.live-state.state-DRY    { color: var(--dry);    background: none; }
+.live-state.state-DAMP   { color: var(--damp);   background: none; }
+.live-state.state-WET    { color: var(--wet);    background: none; }
+.live-state.state-DRYING { color: var(--drying); background: none; }
+.live-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: currentColor;
+  animation: livepulse 2s ease-in-out infinite;
+}
+.live-num {
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  opacity: .75;
+  letter-spacing: .04em;
+}
+@keyframes livepulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: .3; }
+}
+
+/* ---------- layout ---------- */
+.grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+  align-items: start;
+}
+@media (min-width: 1040px) {
+  .grid { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); }
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+  min-width: 0;
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - var(--cut)),
+                     calc(100% - var(--cut)) 100%, 0 100%);
+}
+
+/* Section headings carry a red tick, the way broadcast panels do. */
+.panel h2 {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: .64rem;
+  letter-spacing: .2em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.panel h2::before {
+  content: "";
+  width: 3px;
+  height: 12px;
+  background: var(--f1);
+  flex: none;
+}
+
+/* The suggestion, embedded in the readout column rather than in its own
+   panel below the fold. A suggestion nobody scrolls to is unread. */
+.embedded-block {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.embedded-block > .cap { color: var(--ink-dim); font-weight: 700; }
+
+/* ---------- upload ---------- */
+.drop {
+  border: 1.5px dashed var(--line);
+  padding: 20px;
+  text-align: center;
+  color: var(--ink-dim);
+  font-family: var(--mono);
+  font-size: .72rem;
+  letter-spacing: .06em;
+  cursor: pointer;
+  transition: border-color .15s, background .15s, color .15s;
+}
+.drop:hover, .drop.over {
+  border-color: var(--f1);
+  background: rgba(225, 6, 0, .06);
+  color: var(--ink);
+}
+.preview {
+  width: 100%;
+  border: 1px solid var(--line);
+  display: block;
+  background: #000;
+}
+.preview-wrap { position: relative; line-height: 0; }
+
+/* The scored region. White so it stays legible over any track colour,
+   wet or dry, day or night - a coloured box competes with the footage. */
+.roi-box {
+  position: absolute;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .55), 0 0 12px rgba(0, 0, 0, .4);
+  background: rgba(255, 255, 255, .06);
+  pointer-events: none;
+}
+
+/* ---------- state readout ---------- */
+.state-row { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+
+/* The condition label, styled like an F1 flag graphic: solid fill, dark
+   text, angular cut, leaning forward. This is the one element a viewer
+   must read from across the room. */
+.state-badge {
+  font-family: var(--sans);
+  font-size: 1.75rem;
+  font-weight: 900;
+  font-style: italic;
+  letter-spacing: .04em;
+  padding: 8px 20px 8px 16px;
+  line-height: 1.05;
+  color: #070a0d;
+  background: var(--ink-faint);
+  clip-path: polygon(0 0, 100% 0, calc(100% - 12px) 100%, 0 100%);
+}
+.state-DRY    { background: var(--dry); }
+.state-DAMP   { background: var(--damp); }
+.state-WET    { background: var(--wet); color: #fff; }
+.state-DRYING { background: var(--drying); }
+
+/* A label change is the moment this product exists for. It used to arrive
+   with no more emphasis than a digit ticking over, so it now announces
+   itself once and then stops - a permanently animated badge would be
+   noise, and the still state is what gets read. */
+/* The glow is white, NOT currentColor: the badge's text colour is near
+   black on every state except WET, so a currentColor glow would render as
+   a dark smudge - and would change between states for no reason. */
+.state-badge.flash { animation: badgeflash 1.4s ease-out 1; }
+@keyframes badgeflash {
+  0%   { transform: scale(1);    filter: brightness(1);
+         box-shadow: 0 0 0 0 rgba(255, 255, 255, 0); }
+  12%  { transform: scale(1.06); filter: brightness(1.35);
+         box-shadow: 0 0 30px -2px rgba(255, 255, 255, .6); }
+  100% { transform: scale(1);    filter: brightness(1);
+         box-shadow: 0 0 0 0 rgba(255, 255, 255, 0); }
+}
+
+/* First run: three steps instead of four dashes. */
+.onboard-hint {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 18px;
+  background: var(--panel-2);
+  border-left: 3px solid var(--f1);
+}
+.onboard-hint ol {
+  margin: 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.onboard-hint li { font-size: .85rem; color: var(--ink-dim); line-height: 1.45; }
+.onboard-hint li b { color: var(--ink); font-weight: 700; }
+.onboard-hint ol::marker { color: var(--f1); }
+
+.readout { display: flex; flex-direction: column; gap: 1px; }
+.readout .big {
+  font-family: var(--mono);
+  font-size: 1.55rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+.cap, .readout .cap {
+  font-family: var(--mono);
+  font-size: .6rem;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+/* Wetness bar, with the threshold boundaries marked. The gradient is not
+   decoration: it shows WHERE the current value sits between dry and
+   flooded, which a bare number cannot. */
+.gauge {
+  height: 10px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  position: relative;
+  overflow: hidden;
+}
+.gauge::before,
+.gauge::after {
+  content: "";
+  position: absolute;
+  top: 0; bottom: 0;
+  width: 1px;
+  background: rgba(255, 255, 255, .22);
+  z-index: 2;
+}
+.gauge::before { left: 45%; }   /* DRY_THRESHOLD  */
+.gauge::after  { left: 65%; }   /* DAMP_THRESHOLD */
+.gauge > div { height: 100%; transition: width .35s ease, background .35s ease; }
+
+.pill {
+  font-family: var(--mono);
+  font-size: .64rem;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  padding: 4px 9px;
+  background: var(--panel-2);
+  color: var(--ink-dim);
+  border: 1px solid var(--line);
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+}
+.pill.warn {
+  color: var(--damp);
+  border-color: rgba(255, 195, 0, .5);
+  background: rgba(255, 195, 0, .08);
+}
+
+/* ---------- controls ---------- */
+.controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+
+/* Controls grouped by the decision they belong to - source, capture,
+   session - instead of one long toolbar where everything looks equally
+   important. The label column keeps the groups scannable without boxing
+   each one in its own border. */
+.ctl-group {
+  display: grid;
+  grid-template-columns: 62px 1fr;
+  gap: 10px;
+  align-items: center;
+}
+.ctl-label {
+  font-family: var(--mono);
+  font-size: .56rem;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  text-align: right;
+  padding-top: 2px;
+}
+@media (max-width: 620px) {
+  .ctl-group { grid-template-columns: 1fr; }
+  .ctl-label { text-align: left; }
+}
+
+button {
+  font-family: var(--mono);
+  font-size: .69rem;
+  font-weight: 600;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  background: var(--panel-2);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  padding: 7px 13px;
+  cursor: pointer;
+  transition: border-color .12s, background .12s, color .12s;
+}
+button:hover:not(:disabled) {
+  border-color: var(--f1);
+  background: rgba(225, 6, 0, .1);
+}
+button:disabled { opacity: .38; cursor: not-allowed; }
+button.primary {
+  background: var(--f1);
+  color: #fff;
+  border-color: var(--f1);
+  font-weight: 700;
+}
+button:focus-visible { outline: 2px solid var(--f1); outline-offset: 2px; }
+
+select, input[type="text"], input[type="number"] {
+  font-family: var(--mono);
+  font-size: .7rem;
+  background: var(--panel-2);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  padding: 6px 8px;
+}
+select:focus-visible, input:focus-visible {
+  outline: 2px solid var(--f1);
+  outline-offset: 1px;
+}
+
+/* ---------- frame log: the timing tower ---------- */
+.tablewrap { overflow: auto; max-height: 300px; }
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--mono);
+  font-size: .71rem;
+}
+th {
+  position: sticky; top: 0;
+  background: var(--panel-2);
+  color: var(--ink-faint);
+  font-weight: 700;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  font-size: .58rem;
+  text-align: right;
+  padding: 7px 9px;
+  border-bottom: 1px solid var(--line);
+}
+th:first-child, td:first-child { text-align: left; }
+td {
+  padding: 6px 9px;
+  border-bottom: 1px solid var(--line-soft);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-dim);
+}
+tbody tr:hover td { background: rgba(255, 255, 255, .03); }
+
+/* A label change is the only row an engineer needs to find later, so it
+   gets the timing-tower treatment: brightened, with a marker in the gutter. */
+tr.changed td { color: var(--ink); background: rgba(255, 255, 255, .04); }
+tr.changed td:first-child { box-shadow: inset 3px 0 0 var(--f1); }
+tr.low td { opacity: .45; }
+
+.empty {
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: .7rem;
+  letter-spacing: .06em;
+  padding: 24px 0;
+  text-align: center;
+}
+
+/* ---------- race context ---------- */
+.fieldrow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+}
+.field { display: flex; flex-direction: column; gap: 4px; }
+.field input, .field select { width: 100%; }
+.field input[type="number"] { width: 84px; }
+
+/* ---------- suggestion ---------- */
+.banner {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 12px 14px;
+  border-left: 4px solid var(--ink-faint);
+  background: var(--panel-2);
+}
+/* Urgency is carried by colour as well as words - a pit wall is scanned,
+   not studied. */
+.banner.INFO     { border-left-color: var(--ink-faint); }
+.banner.ADVISORY { border-left-color: var(--damp);
+                   background: rgba(255, 195, 0, .08); }
+.banner.URGENT   { border-left-color: var(--wet);
+                   background: rgba(255, 45, 45, .1); }
+
+.banner .badge {
+  font-family: var(--mono);
+  font-size: .64rem;
+  font-weight: 700;
+  letter-spacing: .14em;
+  white-space: nowrap;
+  padding-top: 3px;
+  color: var(--ink-faint);
+}
+.banner.ADVISORY .badge { color: var(--damp); }
+.banner.URGENT   .badge { color: var(--wet); }
+.banner .msg { font-size: .95rem; line-height: 1.45; color: var(--ink); }
+.msgwrap { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.banner .sub { font-size: .8rem; color: var(--ink-dim); line-height: 1.4; }
+
+.notes { margin: 0; padding-left: 17px; display: flex;
+         flex-direction: column; gap: 4px; }
+.notes li { font-size: .8rem; color: var(--ink-dim); }
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+.stat {
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-top: 2px solid var(--line);
+  padding: 9px 11px;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.stat .val {
+  font-size: 1rem; font-weight: 700; color: var(--ink);
+  display: flex; align-items: center; gap: 8px;
+}
+.stat .val.mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.stat .unit { font-size: .68rem; color: var(--ink-faint); font-weight: 400; }
+.stat .arrow { color: var(--f1); font-weight: 700; }
+
+/* Tyre chips use the real Pirelli compound colours - an F1 audience reads
+   these instantly, with no legend. */
+.tyre {
+  display: inline-flex; align-items: center; gap: 7px;
+  font-family: var(--mono); font-size: .78rem; font-weight: 700;
+  letter-spacing: .04em;
+}
+.tyre i {
+  width: 11px; height: 11px; border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, .25);
+  flex: none;
+}
+
+/* ---------- why panel ---------- */
+.why-head { display: flex; align-items: baseline; gap: 12px; }
+.why-label {
+  font-family: var(--sans);
+  font-size: 1.45rem;
+  font-weight: 900;
+  font-style: italic;
+  letter-spacing: .03em;
+}
+.why-since {
+  font-family: var(--mono);
+  font-size: .65rem;
+  color: var(--ink-faint);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+.why-block { display: flex; flex-direction: column; gap: 5px; }
+.why-rows { display: flex; flex-direction: column; }
+.why-rows > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: .8rem;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+.why-rows > div:last-child { border-bottom: none; }
+.why-rows span { color: var(--ink-dim); }
+.why-rows b {
+  font-family: var(--mono);
+  color: var(--ink);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.checklist { list-style: none; margin: 0; padding: 0;
+             display: flex; flex-direction: column; gap: 6px; }
+.checklist li { display: grid; grid-template-columns: 15px 1fr; gap: 9px; }
+.checklist .mark { font-family: var(--mono); font-weight: 700; padding-top: 1px; }
+.checklist li.ok .mark { color: var(--ok); }
+/* Failed checks are dimmed, not red: a check that did not fire is
+   information, not an error. */
+.checklist li.no .mark { color: var(--ink-faint); }
+.checklist .txt { display: flex; flex-direction: column; gap: 1px;
+                  font-size: .8rem; }
+.checklist li.ok .txt { color: var(--ink); }
+.checklist li.no .txt { color: var(--ink-faint); }
+.checklist em {
+  font-style: normal;
+  font-family: var(--mono);
+  font-size: .67rem;
+  color: var(--ink-faint);
+}
+
+/* Animations too, not just transitions: the badge flash and the live-dot
+   pulse are exactly the kind of motion this preference exists to stop. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    transition: none !important;
+    animation: none !important;
+  }
+}
