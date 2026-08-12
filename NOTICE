@@ -1,0 +1,61 @@
+Weather Whiplash — Live Track Condition Detector
+Copyright 2026 Abhinav Shakya
+
+This product includes software developed for Problem Statement 02
+(Weather Whiplash), licensed under the Apache License, Version 2.0.
+
+
+THIRD-PARTY COMPONENTS
+======================
+
+The source code in this repository is Apache-2.0. The following third-party
+components are NOT covered by that licence and carry their own terms. They
+are downloaded at runtime or used only during training; none of their weights
+are redistributed in this repository.
+
+Models fetched from the Hugging Face Hub at first launch
+--------------------------------------------------------
+  openai/clip-vit-base-patch32                     MIT
+  google/flan-t5-small                             Apache-2.0
+  nvidia/segformer-b0-finetuned-ade-512-512        NVIDIA Source Code Licence
+  nvidia/segformer-b0-finetuned-cityscapes-...     NVIDIA Source Code Licence
+  facebook/dinov2-small (training notebook only)   Apache-2.0
+
+  The SegFormer checkpoints are referenced by disabled/experimental code
+  paths (USE_SEGMENTATION = False, auto-ROI off by default) and are only
+  downloaded if those features are switched on.
+
+Datasets used only for the retraining experiment
+------------------------------------------------
+  RSCD (Road Surface Classification Dataset)       CC BY-NC
+  RoadSaW (VISCODA GmbH, CVPR-W 2022)              CC BY-NC-SA 4.0
+
+  Both are NON-COMMERCIAL licences. They are downloaded by
+  tools/train_probe_v2.ipynb during training experiments only; no images or
+  derived weights from either dataset are committed to this repository. Any
+  probe trained from them inherits their non-commercial terms and must not be
+  redistributed under Apache-2.0.
+
+Live weather data
+-----------------
+  Open-Meteo (https://open-meteo.com)              CC BY 4.0
+  Free for non-commercial and commercial use with attribution.
+
+Circuit data
+------------
+  circuits.json lap_time_s and pit_loss_s values marked "_measured" were
+  computed from publicly available timing data via the FastF1 library
+  (MIT). Fields marked "_estimated" are typical published figures. Every
+  entry records its own provenance.
+
+
+TRAINING DATA NOT INCLUDED
+==========================
+
+The calibrate/ directory referenced throughout the documentation holds
+labelled frames captured from race broadcasts. It is excluded from version
+control: those frames are third-party broadcast content and are not ours to
+redistribute.
+
+backend/app/probe.npz — the trained linear classifier — IS committed. It
+contains 1,536 fitted coefficients, not imagery.

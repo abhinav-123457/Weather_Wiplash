@@ -38,6 +38,7 @@ models, CPU-only, runs offline after the first launch.
 - [Retraining the classifier](#retraining-the-classifier)
 - [Known limitations](#known-limitations)
 - [Troubleshooting](#troubleshooting)
+- [Licence](#licence)
 
 ---
 
@@ -395,9 +396,12 @@ tools/
 
 circuits.json            24 circuits, every field marked with its provenance
 setup/smoke_test.py      environment check with measured timing
-SYSTEM.md                full technical documentation
-docs/BUILD_PLAN.md       the original plan (superseded — see note below)
 ```
+
+There is no separate design document: `backend/app/config.py` carries the
+measurement behind every tunable, and this README carries the architecture.
+Keeping the reasoning next to the number it justifies is the only way it stays
+true when the number changes.
 
 ---
 
@@ -536,21 +540,38 @@ restore the previous behaviour exactly.
 
 ## Notes
 
-`docs/BUILD_PLAN.md` describes the **original** architecture — SegFormer
-segmentation and a full race-strategy engine. Both were removed on evidence. It
-is kept as the record of what was planned before the measurements changed it,
-and it contradicts the current system by design. **`SYSTEM.md` is
-authoritative.**
-
 The `calibrate/` directory holds labelled training frames captured from race
 broadcasts. It is **excluded from version control** — those frames are
 third-party broadcast content and are not ours to redistribute. `probe.npz`,
 the classifier derived from them, *is* committed, because it is 1,536 numbers
 rather than imagery.
 
-Dataset licences: **RSCD** is CC BY-NC, **RoadSaW** is CC BY-NC-SA. Fine for
-research and this competition; a commercial deployment would need a probe
-trained on licensed or self-collected data.
+---
+
+## Licence
+
+The source code in this repository is licensed under the
+**[Apache License 2.0](LICENSE)** — free to use, modify and distribute,
+commercially or otherwise, with attribution and a patent grant included.
+
+Third-party components keep their own terms, listed in full in
+[NOTICE](NOTICE). The short version:
+
+| Component | Licence | Note |
+|---|---|---|
+| `openai/clip-vit-base-patch32` | MIT | fetched at runtime, not redistributed |
+| `google/flan-t5-small` | Apache-2.0 | fetched at runtime, off by default |
+| SegFormer checkpoints | NVIDIA Source Code Licence | disabled/experimental paths only |
+| Open-Meteo weather data | CC BY 4.0 | attribution shown in the UI |
+| **RSCD** dataset | **CC BY-NC** | training experiment only |
+| **RoadSaW** dataset | **CC BY-NC-SA 4.0** | training experiment only |
+
+**The one thing to be careful about:** RSCD and RoadSaW are **non-commercial**
+licences. No image or weight derived from either is committed here — the
+notebook downloads them at training time — but a probe trained on them
+inherits those terms and **cannot** be redistributed under Apache-2.0. The
+shipped `probe.npz` is trained only on our own labelled frames, so the repo as
+published is clean.
 
 ---
 
