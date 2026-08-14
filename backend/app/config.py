@@ -73,11 +73,24 @@ MIN_ROAD_COVERAGE = 0.02
 #
 # These presets are only sensible starting points - the track sits in a
 # different part of the frame in almost every shot.
+# WIDENED to match how the classifier was actually trained.
+#
+# extract_frames.py writes WHOLE frames and train_probe.py embeds them
+# whole, so the probe - and the LoRA adapter above it - only ever saw
+# complete broadcast pictures: sky, barriers, bodywork and all. Serving
+# them a tight strip of asphalt hands the model a kind of image it was
+# never fitted on. That mismatch existed from the first day and was
+# invisible because both halves looked individually reasonable.
+#
+# So the presets now match training rather than intuition:
+#   trackside  the whole frame
+#   onboard    the band that used to be trackside - still clipping the
+#              worst of the cockpit, but far closer to a full picture
+#
+# Confirmed in the running app before being written here.
 ROI_PRESETS = {
-    # Avoids the car body along the bottom and the skyline along the top.
-    "onboard":   [0.08, 0.14, 0.92, 0.55],
-    # Broadcast trackside shots usually put the surface across the middle.
-    "trackside": [0.03, 0.20, 0.97, 0.90],
+    "onboard":   [0.03, 0.20, 0.97, 0.90],
+    "trackside": [0.00, 0.00, 1.00, 1.00],
 }
 
 # --------------------------------------------------------------------------
@@ -107,7 +120,17 @@ ROI_PRESETS = {
 # the previous behaviour exactly. Verify with the Test ROI button on one
 # known-dry and one known-wet frame before trusting a session.
 # --------------------------------------------------------------------------
-ROI_TO_SQUARE = True
+# TURNED OFF alongside the widened presets above, for the same reason.
+#
+# Squaring was introduced when the ROI was a narrow band and CLIP's
+# centre-crop was discarding ~75% of it. With the presets now covering the
+# whole frame that problem is gone - and squaring would REINTRODUCE a
+# mismatch, because the training images went through CLIPProcessor's normal
+# resize-and-centre-crop, not a stretch to square.
+#
+# Set back to True only if the presets are narrowed again; the two settings
+# belong together.
+ROI_TO_SQUARE = False
 ROI_SQUARE_SIZE = 224          # CLIP ViT-B/32's native input resolution
 
 # SegFormer is 73% of per-frame cost (290ms of 397ms measured). If you need
@@ -243,6 +266,39 @@ CONTEXT_DISAGREEMENT = 45.0
 USE_PROBE = True
 PROBE_PATH = "probe.npz"
 
+# --------------------------------------------------------------------------
+# LoRA-adapted vision tower - OFF until verified in the running app.
+#
+# Measured leave-one-race-out on the 199-frame set, the same protocol and
+# the same frames as the frozen baseline:
+#
+#     metric            frozen+probe    LoRA
+#     3-class                  0.462    0.573
+#     dry kept dry             31.4%    60.0%
+#     wet vs not-wet           0.789    0.819
+#
+# +0.111 is 22 more frames correct and clears the ~0.07 noise band for this
+# sample size. It is the first change in this project to beat the frozen
+# baseline - and it only became possible AFTER the dataset was fixed, when
+# three venues finally held several classes each. On the old confounded 96
+# frames, four separate fine-tuning runs tied or lost.
+#
+# Still weak where everything has been weak: damp recall 30%. More damp
+# frames remain the highest-value data, not a bigger adapter.
+#
+# HOW IT PLUGS IN
+# Only ClipScorer.embedding() changes - the adapted vision tower produces
+# the 512-d vector instead of the frozen one. Everything downstream (probe,
+# temporal layer, rules) is untouched, because head.npz from the notebook
+# has exactly the same keys as probe.npz.
+#
+# FALLBACK IS AUTOMATIC. A missing directory, a missing peft install or a
+# load error prints loudly and reverts to the frozen tower, because a
+# perception layer that fails silently is far worse than one that fails.
+# --------------------------------------------------------------------------
+USE_LORA = False
+LORA_PATH = "lora_adapter"      # dir holding adapter_config.json + weights
+
 # Optional SECOND-OPINION probe - never votes.
 #
 # probe_road.npz is trained on ~1M public road images (RSCD + RoadSaW) and
@@ -262,6 +318,80 @@ PROBE_PATH = "probe.npz"
 # beside the decision, never fused into it - the same rule scene context
 # follows. Absent file = feature off.
 ROAD_PROBE_PATH = "probe_clip_both.npz"
+
+# --------------------------------------------------------------------------
+# CLAHE - strip the luminance cue before CLIP ever sees the crop.
+#
+# THE HYPOTHESIS THIS TESTS
+# The probe calls dark-but-dry track damp: heavy rubber, overcast light,
+# floodlit night. Measured leave-one-race-out, 29 of 31 dry frames land in
+# damp - identically across a linear head, a 64-unit MLP, a 256-unit MLP
+# and an RBF kernel. If the cue being used is simply "this crop is dark",
+# then equalising brightness should break it.
+#
+# CLAHE (Contrast Limited Adaptive Histogram Equalization) normalises
+# local contrast on the L channel in LAB space, leaving colour alone. A
+# night crop and a noon crop come out at a similar baseline lightness,
+# while asphalt grain, rubber streaks and specular sheen survive - so what
+# is left for the model to use is texture, not luminance.
+#
+# THIS CAN ALSO MAKE THINGS WORSE, which is the point of measuring it: wet
+# asphalt genuinely IS darker than dry, so removing brightness removes some
+# real signal along with the confound. Whether the trade is worth it is an
+# empirical question, not an argument.
+#
+# APPLIED INSIDE ClipScorer.embedding(), so training (train_probe.py),
+# validation (test_capacity.py, validate_loro.py) and inference all go
+# through the identical transform. A flag that changed only inference
+# would silently invalidate the probe.
+#
+# TO TEST:  set True -> python tools\train_probe.py -> python tools\test_capacity.py
+#           compare "dry kept dry" against the 3.2% baseline.
+# --------------------------------------------------------------------------
+USE_CLAHE = False
+CLAHE_CLIP_LIMIT = 2.0        # higher = stronger equalisation, more noise
+CLAHE_GRID = 8                # tiles per axis; 8x8 is the OpenCV default
+
+
+# --------------------------------------------------------------------------
+# LIGHTING-ROUTED PROBES - two models, complementary blind spots.
+#
+# Measured, venue-held-out, on the same 96 F1 frames:
+#
+#     probe              dry kept dry   fails on
+#     F1-trained         3.2%           daylight dark tracks (rubber,
+#                                       overcast) - it never saw a dry
+#                                       frame from a venue it knows as wet
+#     road-trained       38.7%          night / floodlights - RSCD and
+#                                       RoadSaW are daytime-only datasets
+#
+# Neither is good everywhere, but they fail in DIFFERENT places, and the
+# scene classifier already tells them apart: it reads the full frame for
+# sky, shadows and floodlights, independently of the track surface.
+#
+# So route rather than choose: daylight scenes are scored by the road
+# probe, floodlit ones by the F1 probe. This is not an ensemble - no
+# averaging, no fusion. One model is picked per frame, and the response
+# says which, so a wrong call is always traceable to a specific model.
+#
+# Mixing the two into ONE probe was tried and measured worse than either
+# endpoint, twice (see ROAD_PROBE_PATH). Routing is what remains once
+# fusion is ruled out.
+#
+# OFF BY DEFAULT: it changes which model produces the score, so verify on
+# your own footage with Test ROI before trusting it in a session.
+# --------------------------------------------------------------------------
+USE_LIGHTING_ROUTING = False
+
+# Scene labels (from CONTEXT_PROMPT_GROUPS) that should use the ROAD probe.
+# Everything else - night_dry, and anything when context is unavailable -
+# falls back to the F1 probe, which is the safer default because it has at
+# least seen floodlit track.
+DAYLIGHT_SCENES = ("sunny", "overcast", "raining")
+
+# Below this scene confidence the routing decision is not trustworthy, so
+# the F1 probe is used. Routing on a coin-flip is worse than not routing.
+ROUTING_MIN_SCENE_CONFIDENCE = 0.50
 
 # PRIMARY TUNING KNOB - not a detail.
 # Measured CLIP similarities span only ~0.04 between prompts, so this value

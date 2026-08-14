@@ -10,8 +10,8 @@ const SESSION = "ui";
 // mask, so this is the most important control in the app. Keep these two
 // lists in step - the backend uses its own copy when no roi is sent.
 const PRESETS = {
-  onboard: [0.08, 0.14, 0.92, 0.55],
-  trackside: [0.03, 0.20, 0.97, 0.90],
+  onboard: [0.03, 0.20, 0.97, 0.90],
+  trackside: [0.00, 0.00, 1.00, 1.00],
 };
 
 const COLOR = {
