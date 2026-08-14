@@ -296,7 +296,7 @@ PROBE_PATH = "probe.npz"
 # load error prints loudly and reverts to the frozen tower, because a
 # perception layer that fails silently is far worse than one that fails.
 # --------------------------------------------------------------------------
-USE_LORA = False
+USE_LORA = True
 LORA_PATH = "lora_adapter"      # dir holding adapter_config.json + weights
 
 # Optional SECOND-OPINION probe - never votes.
