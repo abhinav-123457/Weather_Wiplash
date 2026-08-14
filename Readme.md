@@ -1,6 +1,5 @@
 # Weather Whiplash — Live Track Condition Detector
 
-![Photo](MAIN.png)
 Reads camera frames of a racetrack, decides whether the surface is **Dry,
 Damp, Wet or Drying**, tracks how it changes over time, and turns that into a
 tyre suggestion.
@@ -14,7 +13,7 @@ models, CPU-only, runs offline after the first launch.
    [1] ROI crop              operator marks the track surface
         |
    [2] CLIP ViT-B/32         512-d embedding            (Hugging Face Hub)
-        |
+        |                    optionally LoRA-adapted on our own frames
    [3] Linear probe          dry / damp / wet + confidence
         |
    [4] Temporal layer        EMA -> slope -> trend -> the four labels
@@ -32,11 +31,12 @@ models, CPU-only, runs offline after the first launch.
 - [Quick start](#quick-start)
 - [How to use it](#how-to-use-it)
 - [How it works, in depth](#how-it-works-in-depth)
-- [Results, honestly](#results-honestly)
+- [Results](#results)
+- [The confound, and how it was found](#the-confound-and-how-it-was-found)
 - [What was tried and removed](#what-was-tried-and-removed)
 - [Repository layout](#repository-layout)
+- [Building a dataset](#building-a-dataset)
 - [API reference](#api-reference)
-- [Retraining the classifier](#retraining-the-classifier)
 - [Known limitations](#known-limitations)
 - [Troubleshooting](#troubleshooting)
 - [Licence](#licence)
@@ -69,8 +69,8 @@ image, because it is not in the image.
 
 ## Quick start
 
-**Requirements:** Python 3.12+, Node 20+, ~2 GB free disk (model weights),
-internet on first run only.
+**Requirements:** Python 3.12+, Node 20+, ~2 GB free disk, internet on first
+run only.
 
 ### 1. Clone
 
@@ -89,7 +89,7 @@ python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 
 pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
-pip install "transformers>=5.0,<6.0" pillow numpy opencv-python-headless `
+pip install "transformers>=5.0,<6.0" peft pillow numpy opencv-python-headless `
             fastapi "uvicorn[standard]" python-multipart huggingface_hub `
             scikit-learn psutil
 
@@ -106,7 +106,7 @@ python3 -m venv .venv
 source .venv/bin/activate
 
 pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
-pip install "transformers>=5.0,<6.0" pillow numpy opencv-python-headless \
+pip install "transformers>=5.0,<6.0" peft pillow numpy opencv-python-headless \
             fastapi "uvicorn[standard]" python-multipart huggingface_hub \
             scikit-learn psutil
 
@@ -120,21 +120,23 @@ Wait for:
 ```
 loading models...
   segmentation disabled - ROI defines the track region
-  probe loaded: 83.3% cross-validated
+  CLAHE preprocessing: off
+  LoRA: building vision tower from CLIPVisionConfig (hidden_size=768)
+  LoRA vision tower: ON  (adapter alters embeddings by 2.395 max)
+  probe loaded: 69.3% cross-validated
   CLIP ready (13 prompts cached)
-models loaded in 6.2s
 ```
 
-The **first** launch downloads CLIP (~600 MB) from the Hugging Face Hub. Every
-launch after that is offline and takes a few seconds.
+The **first** launch downloads CLIP (~600 MB). Every launch after is offline.
 
-> `probe loaded` is the line that matters. If it says *"probe.npz is missing —
-> falling back to prompts"*, accuracy drops from 83% to 54%. See
-> [Troubleshooting](#troubleshooting).
+> Every line that changes what the model *sees* prints at startup. If `LoRA
+> vision tower` says anything other than `ON`, it fell back to frozen CLIP and
+> named the reason — a perception layer that fails silently is worse than one
+> that fails.
 
 ### 3. Frontend
 
-In a **second terminal**:
+In a second terminal:
 
 ```bash
 cd frontend
@@ -144,52 +146,41 @@ npm run dev
 
 Open **<http://localhost:5173>**.
 
-Vite proxies `/api` and `/health` to port 8000, so the browser sees a single
-origin and CORS never enters the picture.
-
 ### 4. Check it works
 
 ```bash
-python setup/smoke_test.py
+python setup/smoke_test.py       # imports, models, per-frame timing
+python tools/verify_lora.py      # is the adapter actually live?
 ```
-
-Verifies imports, loads the models, and reports measured per-frame timing.
 
 ---
 
 ## How to use it
 
-The app needs **frames of track surface** — screenshots from race footage, a
-video file, or a live camera.
-
 ### Step 1 — pick a source
 
 | Mode | Use it for |
 |---|---|
-| **Still frames** | A folder of screenshots. Runs in filename order, so name them `race_01.png`, `race_02.png`… |
-| **Video file** | Any local video. Samples a frame every *N* seconds while it plays. Pause the video and sampling pauses too — useful for skipping broadcast cut-aways. |
-| **Camera** | A webcam or phone camera. The real deployment shape. |
+| **Still frames** | A folder of screenshots, run in filename order |
+| **Video file** | Samples a frame every *N* seconds while it plays. Pause the video and sampling pauses too — useful for skipping broadcast cut-aways |
+| **Camera** | A webcam or phone. The real deployment shape |
 
-Also pick **Trackside view** or **Onboard view** — this sets the default ROI.
+Also pick **Trackside** or **Onboard** — this sets the default ROI.
 
-### Step 2 — check the ROI (the most important control)
+### Step 2 — check the ROI
 
-The white box is **exactly what gets scored**. Everything inside it is treated
-as track surface, so a box containing sky, barriers or bodywork produces a
-meaningless number.
+The white box is **exactly what gets scored**. Drag on the image to redraw it;
+the pill shows what fraction of the frame is being read.
 
-- **Drag on the image** to redraw it.
-- The pill shows `scoring 34% of frame` — how much is actually being read.
-- **Test ROI** scores the current frame in a throwaway session, so you can tune
-  the box without polluting the trend line.
+The presets are deliberately large (trackside covers the whole frame) because
+the classifier is *trained* on whole frames — see
+[How it works](#1-roi--matching-what-the-model-was-trained-on).
 
 ### Step 3 — analyse
 
-The right-hand column fills in with the three outputs the brief asks for:
-
-- the **label** (Dry / Damp / Wet / Drying) with a wetness score and trend
-- the **suggestion** — a message and a tyre call
-- the **trend graph**, with threshold bands so the number has meaning
+The right-hand column fills in with the three outputs the brief names: the
+**label**, the **suggestion**, and the **trend graph** with threshold bands so
+the wetness number has meaning.
 
 Below that, **Why this call** shows every check the backend ran — including the
 ones that failed, because knowing why the system is *not* calling a trend is as
@@ -197,164 +188,184 @@ useful as knowing why it is.
 
 ### Step 4 (recommended) — set a dry reference
 
-Absolute scores shift between venues and cameras by 16–28 points (measured).
-The fix is one click:
-
-1. Analyse a frame you **know** shows dry track.
-2. Click **mark last frame as known dry**.
-
-The offset is subtracted from every later frame in the session. If the frame was
-not actually dry the backend refuses it rather than mis-calibrating silently.
+Absolute scores shift between venues and cameras. Analyse a frame you **know**
+shows dry track, click **mark last frame as known dry**, and the offset is
+removed for the rest of the session. If the frame was not actually dry, the
+backend refuses rather than mis-calibrating silently.
 
 ---
 
 ## How it works, in depth
 
-### [1] ROI — the operator defines the track
+### [1] ROI — matching what the model was trained on
 
-Segmentation is **disabled by default** (see
-[what was removed](#what-was-tried-and-removed)), so the ROI *is* the mask.
+Segmentation is disabled (see [what was removed](#what-was-tried-and-removed)),
+so the ROI *is* the mask.
 
-One non-obvious detail matters a lot: `CLIPProcessor` resizes the **shortest**
-side to 224 and then centre-crops. A wide flat band therefore loses most of its
-width before the model sees it:
+The presets are wide on purpose. `tools/extract_frames.py` writes **whole
+frames** and `train_probe.py` embeds them whole, so the classifier has only
+ever seen complete broadcast pictures. Serving it a tight strip of asphalt
+hands it a kind of image it was never fitted on — a train/serve mismatch that
+existed from day one and was invisible because both halves looked reasonable
+alone.
 
-| preset | drawn | aspect | width CLIP kept |
-|---|---|---|---|
-| onboard | 1613×443 | 3.6:1 | ~25% |
-| trackside | 1805×756 | 2.4:1 | ~40% |
+```python
+ROI_PRESETS = {"onboard":   [0.03, 0.20, 0.97, 0.90],   #  66% of frame
+               "trackside": [0.00, 0.00, 1.00, 1.00]}   # 100%
+ROI_TO_SQUARE = False    # CLIPProcessor's own resize+crop, as in training
+```
 
-Three-quarters of an onboard selection was being discarded — which also
-explained why the score was so sensitive to exactly where the box sat.
-`ROI_TO_SQUARE = True` squares the crop first, so the **whole** selection
-reaches CLIP. Effective coverage went from 7.7% of the frame to 34.4%.
+### [2] CLIP — frozen, or LoRA-adapted
 
-### [2] CLIP — a frozen feature extractor
+`openai/clip-vit-base-patch32`. Two modes, one flag:
 
-`openai/clip-vit-base-patch32`, 88M parameters, **never fine-tuned**. It turns
-an image into a 512-d vector. Prompts are kept as a fallback and as the thing
-the probe is measured against.
+- **`USE_LORA = False`** — frozen encoder, 512-d embedding. The original design.
+- **`USE_LORA = True`** — the same tower with LoRA adapters on the attention
+  projections, fine-tuned on our own labelled frames. ~591k trainable
+  parameters, about 1% of the model.
 
-> **transformers v5 note.** v4 returned a plain tensor from `get_*_features()`;
-> v5 returns `BaseModelOutputWithPooling` whose `pooler_output` is *already*
-> projected. Projecting again fails loudly for vision but **succeeds silently**
-> for text on ViT-B/32 (512→512), producing wrong embeddings with a
-> correct-looking shape. `_as_embedding()` compares against
-> `config.projection_dim` to catch exactly that.
+The adapted tower is loaded **separately** from the `CLIPModel` used for text.
+Both encoders contain modules named `q_proj`/`k_proj`/`v_proj`/`out_proj`, so
+adapting the whole model would silently put untrained adapters on the text
+tower and change every prompt in the system.
+
+For the same reason, `embedding()` (probe path) and `embedding_frozen()` (all
+text comparisons) are separate methods. CLIP's image and text spaces are
+aligned by joint training; adapting vision only means an adapted image
+embedding is **not comparable** with a frozen text embedding — the dot product
+still returns a number, and that number means nothing.
+
+> **transformers v5 note.** v4 returned a plain tensor from
+> `get_*_features()`; v5 returns `BaseModelOutputWithPooling` whose
+> `pooler_output` is *already* projected. Projecting again fails loudly for
+> vision but **succeeds silently** for text on ViT-B/32 (512→512).
+> `_as_embedding()` compares against `config.projection_dim` to catch it.
 
 ### [3] Linear probe — ~1,536 numbers
 
-A logistic regression over the frozen embeddings, in `backend/app/probe.npz`.
-Not fine-tuning: CLIP's weights are untouched, and this trains on CPU in
-seconds from ~100 labelled frames.
-
-The **label** comes from `argmax`, not from thresholding — the probe already
-outputs class probabilities. The **continuous wetness** is still needed because
-the temporal layer works on slope, and a categorical label has no slope.
+Logistic regression over the embeddings, in `backend/app/probe.npz`. The
+**label** comes from `argmax`; the **continuous wetness** is still needed
+because the temporal layer works on slope and a categorical label has no slope.
 
 ### [4] Temporal layer — where "drying" comes from
 
-`backend/app/engine/temporal.py`. Per session:
+`backend/app/engine/temporal.py`, per session:
 
-1. **EMA smoothing** (`α = 0.45`) — raw per-frame scores are too noisy for a
-   usable slope.
-2. **Least-squares slope** over the last 5 frames. Fitted, not
-   `last − first`: endpoint differencing lets one noisy frame dictate the
-   trend. The **full** window is required — a partial fit measures the EMA
-   settling, which once produced a phantom DRYING on twelve soaking frames.
-3. **Trend** — `DRYING` if slope ≤ −2.5 **and** wetness is above 45 (a small
-   negative slope on a dry track is noise, not drying).
-4. **The four labels** — state gives three, direction gives the fourth.
-5. **Asymmetric hysteresis** — improving conditions need **3** consecutive
-   frames, worsening only **2**. Slicks too early is a crash; slicks too late
-   costs a few seconds a lap. Direction is judged by `LABEL_SEVERITY`, not
-   string equality, so a track escalating DRY→DAMP→WET still accumulates
-   evidence instead of resetting at every step.
-6. **Confidence gating** — below `CONFIDENCE_MIN = 0.50` the frame still nudges
-   the score at half weight, but is barred from moving the label.
+1. **EMA smoothing** (α = 0.45) — raw scores are too noisy for a usable slope
+2. **Least-squares slope** over the last 5 frames, fitted rather than
+   `last − first`. The **full** window is required — a partial fit measures the
+   EMA settling, which once produced a phantom DRYING on twelve soaking frames
+3. **Trend** — `DRYING` if slope ≤ −2.5 **and** wetness is above 45
+4. **The four labels** — state gives three, direction gives the fourth
+5. **Asymmetric hysteresis** — improving needs **3** consecutive frames,
+   worsening only **2**. Slicks too early is a crash; slicks too late costs
+   seconds. Direction is judged by `LABEL_SEVERITY`, not string equality
+6. **Confidence gating** — below `CONFIDENCE_MIN = 0.50` a frame still nudges
+   the score at half weight but cannot move the label
 
-### [5] Suggestion — deterministic, and deliberately small
+### [5] Suggestion — deterministic, deliberately small
 
-`backend/app/engine/suggestion.py`. 12 headlines keyed by `(label, trend)`,
-plus a safety check against `TIRE_BAND` — the wetness range each tyre can
-actually be used in.
+12 headlines keyed by `(label, trend)`, plus a safety check against
+`TIRE_BAND`. Safety is never traded against lap time: an earlier version had no
+branch for "slicks on a wet track" and advised staying out to save a pit stop —
+on a car with no tread in standing water.
 
-Safety is never traded against lap time. An earlier version had no branch for
-"slicks on a wet track", so it fell through to pit-loss economics and advised
-staying out — on a car with no tread in standing water. Stating a safe band for
-every tyre makes that class of gap impossible.
-
-**Live weather** comes from Open-Meteo (free, no API key) using each circuit's
-coordinates, and every value on screen is labelled with its source —
-`live`, `operator`, or `typical`. If the feed is unreachable the UI says so
-rather than showing a guess as a measurement. Rain at the circuit appears as a
-note; it is **reported, never fused** into the label.
+**Live weather** comes from Open-Meteo (free, no key) using each circuit's
+coordinates, labelled `live` / `operator` / `typical` on screen. If the feed is
+unreachable the UI says so rather than showing a guess as a measurement.
 
 ---
 
-## Results, honestly
+## Results
 
-| | |
-|---|---|
-| **Wet vs not-wet, venue-held-out** | **85.4%** |
-| 3-class, venue-held-out (LORO) | 36.5% |
-| Damp < wet ordering within a venue | Monaco, **2.01 pooled SD** |
-| Trend layer, known-shape sequences | **7 / 7** |
-| Per frame, CPU (i7-1355U) | **~0.11 s** |
+All numbers are **leave-one-race-out**: every prediction comes from a model
+that never saw a single frame of that race.
 
-> **On the 83.3% printed at startup:** that is *random* 5-fold cross-validation
-> over 96 images drawn from race sessions. Frames from the same race are
-> near-duplicates, so a random split trains on siblings of its own test data.
-> Re-validating with **entire races held out** dropped 3-class accuracy to
-> 36.5%. The honest headline is **85.4% wet-vs-not-wet, venue-held-out**.
-
-### The scale-up experiment that failed, and why that is useful
-
-We retrained on ~1M public road images (**RSCD** + **RoadSaW**) with zero F1
-frames, then judged the result against our F1 set with three acceptance gates.
-
-| probe | 3-class | dry frames kept dry | Monaco separation |
+| | 96 frames, 6 races | 199 frames, 8 races | + LoRA |
 |---|---|---|---|
-| F1-only (shipped) | 36.5% | — | 2.01 SD |
-| Road-only (1M images) | **49.0%** | **38.7%** ✗ | 0.63 SD ✗ |
-| Road + F1 mixed (10/30/50%) | 26–30% ✗ | 6–16% ✗ | ~1.5 SD ✗ |
+| **3-class** | 0.365 | 0.487 | **0.573** |
+| **dry frames kept dry** | **3.2%** | 32.9% | **60.0%** |
+| wet vs not-wet | 0.854 | 0.799 | 0.819 |
+| damp recall | — | 36% | 30% |
 
-Road-only scored *higher overall* but failed the tyre-mark gate: **every miss
-was Singapore**, the night race. RSCD and RoadSaW are daytime datasets, so a
-model that has never seen floodlights reads glare on dry asphalt as standing
-water — 94 to 100 out of 100, confidently.
+Per frame on a laptop CPU: ~110 ms frozen, ~156 ms with the adapter.
 
-Mixing was worse than either endpoint, in two independent runs. A single
-1,536-parameter hyperplane cannot hold *"glare means wet"* for daytime roads
-and *"glare means dry floodlights"* for night races at the same time.
+Two things drove the improvement, in this order:
 
-So the road model ships as a **second opinion that never votes** — displayed in
-the Why panel beside the decision. Drop a `probe_clip_both.npz` next to
-`probe.npz` and the row appears; the file's absence turns the feature off.
+1. **Fixing the dataset.** Dry-frames-kept-dry went 3.2% → 32.9% with *no
+   model change at all*.
+2. **Then** fine-tuning, which was worth +0.111 3-class — the first change in
+   the project to beat the frozen baseline, and only possible once the data
+   could support it.
+
+> **On the 83.3% in earlier notes:** that was *random* 5-fold cross-validation.
+> Frames from one race are near-duplicates, so a random split trains on
+> siblings of its own test data. Holding out entire races dropped it to 36.5%.
+> Every number above is venue-held-out.
+
+---
+
+## The confound, and how it was found
+
+The system called dark-but-dry track damp: rubbered-in racing lines, overcast
+days, floodlit night races. The cause turned out to be in the labels, and
+finding that took ruling out everything else.
+
+**The measurement that started it.** Under leave-one-race-out, **29 of 31 dry
+frames were called damp — identically by a linear head, a 64-unit MLP, a
+256-unit MLP and an RBF kernel.** Four capacities, the same 29 mistakes. That
+is not a model that lacks power.
+
+| hypothesis | test | result |
+|---|---|---|
+| the head is too weak | 4 classifier capacities | **No** — all made identical errors |
+| CLIP confuses dark with wet | CLAHE lightness equalisation | **No** — dry accuracy moved 0.0 points, and wet-vs-not-wet *lost* 7 |
+| the venue offset buries it | per-venue mean centring | **Untestable** — with single-class venues the venue mean *is* the class mean |
+| the labels confound it | rebuild the dataset | **Yes** |
+
+The original 96 frames came from six races, and **five were single-class**. Dry
+came from Singapore, Austin and Vegas; damp from Monaco and São Paulo. So *"is
+this damp"* and *"is this Monaco"* were the same question, and the model learned
+venue identity. No architecture can undo that.
+
+The fix was three race videos processed with `tools/extract_frames.py`, giving
+199 frames across 8 races with **three venues holding several conditions each**
+— the first time the dry/damp boundary was measurable at all.
+
+**Five shortcut-confounds were caught this way**, each of which produced a
+metric that looked like a triumph while the model was broken:
+
+| # | shortcut | how it showed up |
+|---|---|---|
+| 1 | venue identity | 29/31 dry frames → damp, at every capacity |
+| 2 | venue centring degeneracy | dry-kept-dry "improved" to 35% — which is chance |
+| 3 | dataset source | BDD frames in one class only → 100% of frames predicted that class |
+| 4 | off-by-one class mapping | rainy road labelled damp → the model never emitted wet |
+| 5 | encoder leakage | an adapter trained on all frames scored 0.940 "held-out" |
+
+`tools/_leakcheck.py` now guards every leave-one-race-out tool against #5.
 
 ---
 
 ## What was tried and removed
 
-Seven features, each physically plausible, each killed by measurement rather
-than argument. This is the part of the project we would most want read.
+Each of these was physically plausible. Each was removed by measurement.
 
 | Feature | Why it went |
 |---|---|
-| **SegFormer segmentation** | 290 ms/frame — 73% of the pipeline — and **0% road found** on four real broadcast frames. It reads circuit barriers as buildings. |
-| **Darkness** | Scored a bone-dry photo of fresh dark tarmac at **84.5/100** wetness. Asphalt colour varies with age and rubber; brightness carries almost no wetness signal. |
-| **Texture (Laplacian)** | Two equally wet Monaco frames gave variances of **25.9 and 487.1** — a 19× swing — because one was motion-blurred. It measured camera sharpness. |
-| **Specular reflection** | **17.5 / 1.0 / 23.3** across three equally wet frames. Broadcast auto-exposure keeps wet road below any highlight threshold. |
-| **Spatial sub-bands** | Band median scored **worse** than the full ROI (1.81 vs 2.01 SD); monotonicity sat at chance and was identical across classes. |
-| **Auto-ROI detection** | Three attempts. Cityscapes' bottom-of-frame prior labels dark bodywork "road", so the box landed on a car's engine cover and read **WET 75**. Kept as an experimental toggle for fixed cameras; the preset plus one drag wins on cut broadcast footage. |
-| **flan-t5 phrasing** | Generated *"The weather is a bit dry and wet"* three times in one message. Guards now catch degenerate repetition, but `USE_PHRASING = False` — the deterministic templates read better and every word can be defended. |
-
-We also retired the claim of "three independent signals": darkness and the CLIP
-"damp" prompt both keyed on brightness, so they failed *together* rather than
-differently — the opposite of independence.
+| **SegFormer segmentation** | 290 ms/frame — 73% of the pipeline — and **0% road found** on real broadcast frames |
+| **Darkness** | Scored a bone-dry photo of fresh dark tarmac at **84.5/100** |
+| **Texture (Laplacian)** | Two equally wet frames: **25.9 and 487.1**. It measured motion blur |
+| **Specular reflection** | **17.5 / 1.0 / 23.3** across three equally wet frames — broadcast auto-exposure |
+| **Spatial sub-bands** | Scored *worse* than the full crop; monotonicity at chance |
+| **Auto-ROI detection** | Boxed a car's engine cover and read **WET 75**. Kept as an experimental toggle for fixed cameras |
+| **CLAHE** | Dry accuracy unchanged, wet-vs-not-wet **−7 points** |
+| **CV feature fusion** | Re-tested on 199 frames: **0.447 vs 0.462 baseline** |
+| **DINOv2 backbone** | Re-tested on 199 frames: **0.467 vs 0.462**. Tied |
+| **flan-t5 phrasing** | Wrote *"The weather is a bit dry and wet"* three times in one message |
 
 The classical CV features still compute and are reported as diagnostics. They
-simply do not vote.
+do not vote.
 
 ---
 
@@ -364,45 +375,70 @@ simply do not vote.
 backend/app/
   config.py              every tunable, with the measurement behind it
   main.py                FastAPI app, routes, model lifespan
-  probe.npz              the trained classifier (committed — 1,536 numbers)
+  probe.npz              the trained classifier
+  lora_adapter/          optional LoRA weights (~2.4 MB)
   models/
-    clip_scorer.py       CLIP embedding, prompt ensemble, probe, scene context
+    clip_scorer.py       embeddings, probe, LoRA loading, crop verifier
     cv_features.py       classical CV signals (reported, not scored)
     phrasing.py          flan-t5 message writer with guards (off by default)
     segmentation.py      SegFormer wrapper — disabled, kept as the record
   engine/
     temporal.py          EMA, slope, hysteresis, confidence gating, evidence
     suggestion.py        tyre safety bands, urgency, headlines
-    weather.py           Open-Meteo live conditions, cached, honest fallback
+    weather.py           Open-Meteo live conditions, honest fallback
 
-frontend/src/
-  App.jsx                layout, capture modes, sessions, draggable ROI
-  TrendChart.jsx         hand-drawn SVG chart with threshold bands
-  StrategyPanel.jsx      the suggestion message
-  WhyPanel.jsx           the reasoning behind the current call
-  RaceInputs.jsx         circuit, tyre, live weather readout
-  styles.css             F1 broadcast styling (flag semantics)
+frontend/src/            React dashboard, F1 broadcast styling
 
 tools/
-  train_probe.py         fit the linear probe on labelled images
-  train_probe_v2.ipynb   Colab: retrain on RSCD/RoadSaW + acceptance gates
+  extract_frames.py      turn race video into labelled frames
+  audit_dataset.py       is the dataset able to answer the question?
+  train_probe.py         fit the linear probe
   validate_loro.py       leave-one-race-out validation
-  calibrate.py           threshold + temperature sweep
-  inspect_scores.py      per-venue score distributions
-  inspect_bands.py       spatial sub-band experiment
-  test_trend.py          temporal layer, known-shape sequences
-  run_sequence.py        push a folder of frames through the API
-  make_test_sequence.py  build an ordered sequence from calibration frames
-  refresh_circuits.py    measure lap times / pit losses from real sessions
+  test_capacity.py       is the encoder the bottleneck, or the head?
+  test_upgrades.py       re-test every proposed upgrade on current data
+  test_roi.py            which ROI preset actually scores best
+  verify_lora.py         is the adapter live in the real app path?
+  _leakcheck.py          refuses to report contaminated numbers
+  finetune_f1_lora.ipynb LoRA fine-tune, leave-one-race-out (Colab)
+  finetune_lora.ipynb    LoRA on public road datasets (Colab)
+  train_probe_v2.ipynb   retrain on RSCD/RoadSaW + acceptance gates (Colab)
 
 circuits.json            24 circuits, every field marked with its provenance
-setup/smoke_test.py      environment check with measured timing
+PRESENTATION.md          demo run-sheet
 ```
 
-There is no separate design document: `backend/app/config.py` carries the
-measurement behind every tunable, and this README carries the architecture.
-Keeping the reasoning next to the number it justifies is the only way it stays
-true when the number changes.
+---
+
+## Building a dataset
+
+The single most valuable property is **one venue containing several
+conditions** — that is what makes dry-vs-damp measurable.
+
+```bash
+# 1. see where the race changes condition
+python tools/extract_frames.py monaco2023.mp4 --venue monaco2023 --survey
+
+# 2. extract each phase separately
+python tools/extract_frames.py monaco2023.mp4 --venue monaco2023 \
+    --label dry --start 0 --end 280 --every 4 --max 30 --verify
+python tools/extract_frames.py monaco2023.mp4 --venue monaco2023 \
+    --label wet --start 310 --end 480 --every 4 --max 30 --verify
+
+# 3. check the dataset can answer the question BEFORE training
+python tools/audit_dataset.py
+
+# 4. train and measure
+python tools/train_probe.py
+python tools/validate_loro.py
+```
+
+`extract_frames.py` does four things that hand-screenshotting cannot: it names
+files by venue so leave-one-race-out works, rejects near-duplicate frames,
+discards non-track shots with CLIP, and detects camera type so onboard and
+trackside stay balanced across classes.
+
+`audit_dataset.py` prints a venue × class matrix and refuses to bless a set
+where no venue holds more than one class.
 
 ---
 
@@ -412,167 +448,77 @@ Base URL `http://127.0.0.1:8000`. Interactive docs at `/docs`.
 
 | Method | Route | Purpose |
 |---|---|---|
-| `GET` | `/health` | model status, scoring method, active sessions |
-| `POST` | `/api/analyze/image` | **the main endpoint** — one frame in, label + trend + suggestion out |
-| `POST` | `/api/strategy` | recompute the tyre call without re-uploading a frame |
-| `POST` | `/api/reference` | mark the last frame as known-dry (per-camera calibration) |
+| `GET` | `/health` | model status, scoring method |
+| `POST` | `/api/analyze/image` | **the main endpoint** — frame in, label + trend + suggestion out |
+| `POST` | `/api/strategy` | recompute the tyre call without re-uploading |
+| `POST` | `/api/reference` | mark the last frame as known-dry |
 | `GET` | `/api/weather/{circuit}` | live conditions at the circuit |
-| `GET` | `/api/circuits` | circuit list for the dropdown |
-| `POST` | `/api/session/reset` | clear a session's history |
-| `GET` | `/api/session/{id}` | full frame history and chart data |
+| `GET` | `/api/circuits` | circuit list |
+| `POST` | `/api/session/reset` | clear a session |
+| `GET` | `/api/session/{id}` | full history and chart data |
 | `POST` | `/api/roi/suggest` | experimental track detection |
-| `POST` | `/api/debug/mask` | returns the analysed region as a PNG — **look at this first when a score seems wrong** |
-
-Example:
-
-```bash
-curl -X POST http://127.0.0.1:8000/api/analyze/image \
-  -F "file=@frame.jpg" \
-  -F "camera_type=trackside" \
-  -F "session_id=demo" \
-  -F "roi=0.03,0.20,0.97,0.90" \
-  -F "circuit=silverstone" \
-  -F "current_tire=INTER"
-```
-
-Returns `label`, `state`, `trend`, `wetness`, `wetness_raw`, `slope`,
-`confidence`, `evidence[]`, `chart_data[]` and `recommendation{}`.
-
----
-
-## Retraining the classifier
-
-`backend/app/probe.npz` is committed, so **the repo works as cloned**. Retrain
-only if you have your own labelled frames.
-
-### On your own data
-
-```
-calibrate/
-  dry/    monaco2024_trackside_01.png  ...
-  damp/   monaco2023_onboard_03.png    ...
-  wet/    monaco2023_onboard_07.png    ...
-```
-
-The filename prefix before the first underscore is treated as the **race
-identity** — that is what leave-one-race-out holds out, so name files
-consistently or the validation number becomes meaningless.
-
-```bash
-python tools/train_probe.py        # writes backend/app/probe.npz
-python tools/validate_loro.py      # the honest, venue-held-out number
-```
-
-Restart the backend. Startup prints the new accuracy.
-
-### On public road datasets (Colab)
-
-`tools/train_probe_v2.ipynb` is a self-contained pipeline: downloads RSCD and
-RoadSaW, extracts a balanced subset, embeds with CLIP **and** DINOv2, trains
-probes, and runs the three acceptance gates against your F1 frames. Read
-[the results section](#results-honestly) first — road-only training fails the
-night-race gate, and that notebook is how we found out.
+| `POST` | `/api/debug/mask` | the analysed region as a PNG — **look here first when a score seems wrong** |
 
 ---
 
 ## Known limitations
 
-**Night races are the weak spot**, measured four separate ways. Floodlights
-create real specular reflections on *dry* asphalt, so a dry night track and a
-wet one look far more alike than their daytime equivalents. The system degrades
-honestly: confidence drops below threshold and the label is held rather than
-guessed.
+**Damp is the ceiling.** 50 frames, and recall sits at 30–36% however it is
+measured. It is the middle of a continuum labelled by timestamp, and the
+boundary is genuinely fuzzy in footage. More damp frames would move this where
+no architecture has.
 
-**Dry versus damp is unestablished across venues.** No venue in the dataset
-contains both, so the model could only learn venue identity. The most valuable
-data that could be collected is **one venue in both dry and damp conditions**.
+**Night races remain the weak venue.** Floodlights create real specular
+reflections on *dry* asphalt. The system degrades honestly: confidence drops
+and the label is held rather than guessed.
 
-**Absolute scores do not transfer between circuits.** The per-venue offset is
-16–28 points, comparable to the between-class gap. The deployment answer is the
-dry-reference button, not a global threshold.
+**Four venues are still single-class** (`saopaulo2024`, `singapore2017`,
+`singapore2025`, `us2025`, `vegas2025`). They drag the pooled number down
+without being informative; one more condition at any of them is worth more
+than a new venue.
 
-**The 96-frame training set is a prototype dataset.** Real deployment means a
-fixed camera per venue plus a few hundred labelled frames from *that* camera —
-within one fixed view the confounds above largely vanish, and the signal is
-demonstrably there (Monaco damp→wet separates at 2.01 SD).
+**Absolute scores do not transfer between circuits.** The deployment answer is
+the dry-reference button, not a global threshold.
 
 **The wetness scale is not calibrated to a physical quantity.** It is 0–100,
-not millimetres of water film. RoadSaW ships MARWIS sensor ground truth, which
-is the path to fixing that.
+not millimetres of water film.
 
-**Real-world temporal transitions are not validated.** The trend layer passes
-7/7 on known-shape sequences, but we had no continuous wet-to-dry footage to
-test against.
-
-**No dry-line detection.** The racing line dries first, and that *is* the real
-F1 decision — but the spatial-band experiment showed no usable signal, so we
-did not build a feature we could not defend.
+**No dry-line detection.** The racing line dries first and that *is* the real
+F1 decision — but the spatial-band experiment showed no usable signal, so the
+feature was not built.
 
 ---
 
 ## Troubleshooting
 
-**`probe.npz is missing — falling back to prompts`**
-The trained classifier is not where the backend expects it. Confirm
-`backend/app/probe.npz` exists (it is committed — `git checkout --
-backend/app/probe.npz` restores it). Prompt fallback measures 54% vs 83%.
+**`LoRA adapter failed to load`** — the message names the reason. Missing
+`peft`, missing `backend/app/lora_adapter/`, or a version mismatch. It always
+falls back to frozen CLIP, so the app keeps working; `USE_LORA = False` silences
+it.
 
-**Everything reads WET, or everything reads DRY**
-Look at the ROI first. Open `/api/debug/mask` with your frame, or just check
-the white box on screen — if it covers sky, barriers or car bodywork, the score
-is meaningless. Then set a dry reference.
+**Everything reads WET, or everything reads DRY** — check the ROI first. Open
+`/api/debug/mask`, or just look at the white box on screen.
 
-**Frontend loads but shows "backend offline"**
-The backend is still loading models (first run downloads ~600 MB), or it is not
-on port 8000. Check the uvicorn terminal.
+**Frontend loads but shows "backend offline"** — the backend is still loading
+models (first run downloads ~600 MB).
 
-**`ImportError` on `transformers`**
-Requires v5. `pip install "transformers>=5.0,<6.0"`.
+**A tool prints `USE_LORA=True - CONTAMINATED`** — the shipped adapter trained
+on every frame, so leave-one-race-out through it is meaningless. Set
+`USE_LORA = False` and re-run.
 
-**Video mode samples nothing**
-Sampling is skipped while the video is paused — by design, so scrubbing does
-not stack identical frames. Press play.
-
-**Scores changed after an update**
-`ROI_TO_SQUARE` changes what CLIP sees. Set it to `False` in `config.py` to
-restore the previous behaviour exactly.
-
----
-
-## Notes
-
-The `calibrate/` directory holds labelled training frames captured from race
-broadcasts. It is **excluded from version control** — those frames are
-third-party broadcast content and are not ours to redistribute. `probe.npz`,
-the classifier derived from them, *is* committed, because it is 1,536 numbers
-rather than imagery.
+**Video mode samples nothing** — sampling is skipped while paused, by design.
 
 ---
 
 ## Licence
 
-The source code in this repository is licensed under the
-**[Apache License 2.0](LICENSE)** — free to use, modify and distribute,
-commercially or otherwise, with attribution and a patent grant included.
+Source code is **[Apache 2.0](LICENSE)**. Third-party components keep their own
+terms, listed in [NOTICE](NOTICE) — CLIP is MIT, flan-t5 Apache-2.0, Open-Meteo
+CC BY 4.0.
 
-Third-party components keep their own terms, listed in full in
-[NOTICE](NOTICE). The short version:
-
-| Component | Licence | Note |
-|---|---|---|
-| `openai/clip-vit-base-patch32` | MIT | fetched at runtime, not redistributed |
-| `google/flan-t5-small` | Apache-2.0 | fetched at runtime, off by default |
-| SegFormer checkpoints | NVIDIA Source Code Licence | disabled/experimental paths only |
-| Open-Meteo weather data | CC BY 4.0 | attribution shown in the UI |
-| **RSCD** dataset | **CC BY-NC** | training experiment only |
-| **RoadSaW** dataset | **CC BY-NC-SA 4.0** | training experiment only |
-
-**The one thing to be careful about:** RSCD and RoadSaW are **non-commercial**
-licences. No image or weight derived from either is committed here — the
-notebook downloads them at training time — but a probe trained on them
-inherits those terms and **cannot** be redistributed under Apache-2.0. The
-shipped `probe.npz` is trained only on our own labelled frames, so the repo as
-published is clean.
+**RSCD and RoadSaW are non-commercial licences.** They are used only by the
+Colab notebooks for training experiments; no image or weight derived from
+either is committed here.
 
 ---
 
@@ -583,4 +529,4 @@ published is clean.
 - **All four labels** — Dry, Damp and Wet from the classifier, Drying from the temporal layer
 - **Trend graph** — raw and smoothed series with threshold bands and label-change markers
 - **Suggestion message** — deterministic, safety-first, with the reasoning shown
-- **Balanced difficulty** — a classifier trained on our own labelled data over a frozen foundation model, a validated temporal layer, and a deterministic decision layer. Not one ready-made call; nothing from scratch.
+- **Balanced difficulty** — a foundation model adapted on our own labelled data, a validated temporal layer, and a deterministic decision layer. Not one ready-made call; nothing from scratch.
